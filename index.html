@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Diário de Pressão</title>
+<meta name="description" content="Registre sua pressão arterial pelo celular: foto do aparelho, contexto da medição, histórico e relatório para o médico. Os dados ficam só no seu aparelho.">
+<meta name="theme-color" content="#2346B5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D111A" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Pressão">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=Chivo+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="topbar-in">
+      <div>
+        <div class="eyebrow">Diário de Pressão</div>
+        <button id="profileBtn" class="profile-btn" type="button" aria-haspopup="listbox">
+          <span id="profileName">Eu</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <span id="offlineBadge" class="badge" hidden>Offline</span>
+    </div>
+    <div id="profileMenu" class="profile-menu" hidden role="listbox" aria-label="Escolher pessoa"></div>
+  </header>
+
+  <main>
+    <!-- ================= MEDIR ================= -->
+    <section id="view-medir" class="view" aria-labelledby="t-medir">
+      <h1 id="t-medir" class="sr-only">Medir</h1>
+
+      <div class="card">
+        <div class="row-between">
+          <h2>Última medição</h2>
+          <span id="lastWhen" class="muted small">Nenhuma ainda</span>
+        </div>
+        <div class="lcd" aria-live="polite">
+          <div class="lab">SYS<span>mmHg</span></div><div class="val ghost" id="lSys">---</div>
+          <div class="lab">DIA<span>mmHg</span></div><div class="val ghost" id="lDia">---</div>
+          <div class="lab">PUL<span>/min</span></div><div class="val sm ghost" id="lPul">--</div>
+        </div>
+        <div class="row-between">
+          <span id="lastCat"></span>
+          <span id="lastNote" class="muted small clip"></span>
+        </div>
+        <div class="stats" id="stats" hidden>
+          <div class="stat"><span class="eyebrow">Média 7 dias</span><b id="avgBp">–</b></div>
+          <div class="stat"><span class="eyebrow">Pulso médio</span><b id="avgPul">–</b></div>
+          <div class="stat"><span class="eyebrow">Medições</span><b id="cnt7">–</b></div>
+        </div>
+      </div>
+
+      <form class="card" id="form" novalidate>
+        <div class="row-between">
+          <h2 id="formTitle">Nova medição</h2>
+          <button type="button" id="cancelEdit" class="link" hidden>Cancelar edição</button>
+        </div>
+
+        <label class="btn primary cam" for="photo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.4" stroke="currentColor" stroke-width="1.8"/></svg>
+          <span id="camLabel">Fotografar o aparelho</span>
+          <input id="photo" type="file" accept="image/*" capture="environment">
+        </label>
+        <div class="preview" id="previewBox" hidden>
+          <img id="previewImg" alt="Foto do visor do aparelho">
+          <div class="preview-side">
+            <div class="status" id="readStatus"></div>
+            <button type="button" id="removePhoto" class="link">Remover foto</button>
+          </div>
+        </div>
+        <p class="muted small" id="aiHint">Digite os valores do visor abaixo. Para leitura automática da foto, veja <a href="#ajustes">Ajustes</a>.</p>
+
+        <div class="grid3">
+          <div class="field"><label for="fSys">Sistólica <i>mmHg</i></label><input id="fSys" type="number" inputmode="numeric" min="50" max="260" placeholder="120"></div>
+          <div class="field"><label for="fDia">Diastólica <i>mmHg</i></label><input id="fDia" type="number" inputmode="numeric" min="30" max="180" placeholder="80"></div>
+          <div class="field"><label for="fPul">Pulso <i>bpm</i></label><input id="fPul" type="number" inputmode="numeric" min="30" max="220" placeholder="72"></div>
+        </div>
+
+        <fieldset class="field">
+          <legend>O que você estava fazendo?</legend>
+          <div class="tags" id="tags"></div>
+        </fieldset>
+        <div class="field">
+          <label for="fNote">Descrição</label>
+          <textarea id="fNote" rows="3" placeholder="Ex.: sentado no escritório depois de uma reunião tensa, tomei café há 30 min"></textarea>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="fArm">Braço</label>
+            <select id="fArm"><option value="">Não informado</option><option>Esquerdo</option><option>Direito</option></select>
+          </div>
+          <div class="field">
+            <label for="fWhen">Data e hora</label>
+            <input id="fWhen" type="datetime-local">
+          </div>
+        </div>
+        <div class="row">
+          <button id="saveBtn" class="btn primary grow" type="submit">Salvar medição</button>
+          <button id="clearBtn" class="btn" type="button">Limpar</button>
+        </div>
+        <div id="formError" class="status bad" role="alert" hidden></div>
+      </form>
+    </section>
+
+    <!-- ================= HISTÓRICO ================= -->
+    <section id="view-historico" class="view" aria-labelledby="t-hist" hidden>
+      <div class="card" id="trendCard" hidden>
+        <div class="row-between wrap">
+          <h2>Tendência</h2>
+          <div class="seg" role="group" aria-label="Período do gráfico">
+            <button type="button" data-range="7" aria-pressed="false">7 d</button>
+            <button type="button" data-range="30" aria-pressed="true">30 d</button>
+            <button type="button" data-range="90" aria-pressed="false">90 d</button>
+          </div>
+        </div>
+        <div class="legend"><span style="--c:var(--sys)">Sistólica</span><span style="--c:var(--dia)">Diastólica</span><span class="ref">Ref. 130/80</span></div>
+        <div class="chartbox" id="chart"></div>
+      </div>
+      <div class="card">
+        <h2 id="t-hist">Histórico</h2>
+        <div id="log"></div>
+      </div>
+    </section>
+
+    <!-- ================= RELATÓRIO ================= -->
+    <section id="view-relatorio" class="view" aria-labelledby="t-rel" hidden>
+      <div class="card">
+        <h2 id="t-rel">Relatório</h2>
+        <p class="muted small">Escolha o período e exporte para levar ao médico ou guardar.</p>
+        <div class="seg seg-wide" role="group" aria-label="Período rápido" id="presets">
+          <button type="button" data-preset="7" aria-pressed="false">7 dias</button>
+          <button type="button" data-preset="30" aria-pressed="true">30 dias</button>
+          <button type="button" data-preset="90" aria-pressed="false">90 dias</button>
+          <button type="button" data-preset="all" aria-pressed="false">Tudo</button>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="rFrom">De</label><input id="rFrom" type="date"></div>
+          <div class="field"><label for="rTo">Até</label><input id="rTo" type="date"></div>
+        </div>
+        <label class="check"><input type="checkbox" id="rPhotos"> Incluir fotos no relatório impresso</label>
+        <div id="rSummary" class="summary"></div>
+        <div class="row">
+          <button id="rPrint" class="btn primary grow" type="button">Ver relatório / salvar PDF</button>
+        </div>
+        <div class="row">
+          <button id="rCsv" class="btn grow" type="button">Baixar planilha (CSV)</button>
+          <button id="rShare" class="btn grow" type="button" hidden>Compartilhar CSV</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= AJUSTES ================= -->
+    <section id="view-ajustes" class="view" aria-labelledby="t-aj" hidden>
+      <h1 id="t-aj" class="sr-only">Ajustes</h1>
+
+      <div class="card">
+        <h2>Pessoas</h2>
+        <p class="muted small">Se mais de uma pessoa usa este celular, cada uma tem seu próprio histórico.</p>
+        <ul id="profileList" class="plist"></ul>
+        <div class="row">
+          <input id="newProfile" type="text" placeholder="Nome (ex.: Mãe)" aria-label="Nome da nova pessoa" maxlength="40">
+          <button id="addProfile" class="btn" type="button">Adicionar</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Lembretes</h2>
+        <p class="muted small">Cria alarmes diários na agenda do celular nos horários abaixo.</p>
+        <div class="field">
+          <label for="remTimes">Horários</label>
+          <input id="remTimes" type="text" value="09:00, 13:00, 17:00, 21:00" inputmode="text">
+        </div>
+        <div class="row">
+          <button id="remIcs" class="btn grow" type="button">Baixar para a agenda (.ics)</button>
+        </div>
+        <div id="remLinks" class="remlinks"></div>
+        <p class="muted small">iPhone: abra o arquivo .ics e toque em “Adicionar tudo”. Android: use os links do Google Agenda acima, um por horário.</p>
+      </div>
+
+      <div class="card">
+        <h2>Leitura automática da foto <span class="pill">opcional</span></h2>
+        <p class="muted small">Com uma chave da API da Anthropic, o app lê os números do visor sozinho. Cada leitura custa uma fração de centavo na sua conta. A chave fica guardada só neste aparelho e é enviada apenas para api.anthropic.com.</p>
+        <div class="field">
+          <label for="apiKey">Chave da API</label>
+          <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
+        </div>
+        <details>
+          <summary class="small">Avançado</summary>
+          <div class="field" style="margin-top:10px">
+            <label for="apiModel">Modelo</label>
+            <input id="apiModel" type="text" spellcheck="false">
+          </div>
+        </details>
+        <div class="row">
+          <button id="saveKey" class="btn primary grow" type="button">Salvar chave</button>
+          <button id="clearKey" class="btn" type="button">Remover</button>
+        </div>
+        <p class="muted small">Crie a chave em console.anthropic.com → API Keys. Não compartilhe sua chave com outras pessoas.</p>
+      </div>
+
+      <div class="card">
+        <h2>Cópia de segurança</h2>
+        <p class="muted small">Os dados ficam só neste aparelho e neste navegador. Faça uma cópia de vez em quando, principalmente antes de trocar de celular ou limpar o navegador.</p>
+        <label class="check"><input type="checkbox" id="bkPhotos" checked> Incluir fotos (arquivo maior)</label>
+        <div class="row">
+          <button id="bkExport" class="btn grow" type="button">Salvar cópia</button>
+          <label class="btn grow" for="bkImport">Restaurar cópia<input id="bkImport" type="file" accept="application/json,.json" hidden></label>
+        </div>
+        <div id="storageInfo" class="muted small"></div>
+      </div>
+
+      <div class="card danger">
+        <h2>Apagar dados</h2>
+        <p class="muted small">Remove todas as medições e fotos da pessoa selecionada neste aparelho.</p>
+        <button id="wipeBtn" class="btn bad-btn" type="button">Apagar medições de <span id="wipeName">Eu</span></button>
+      </div>
+
+      <footer class="foot">
+        Classificação pela Diretriz Brasileira de Hipertensão Arterial (2020), feita para medidas de consultório. Em medições caseiras, médias a partir de 130/80 mmHg já merecem conversa com o médico. A leitura automática da foto pode errar: confira os números antes de salvar. Este app não substitui avaliação médica.
+      </footer>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Seções">
+    <a href="#medir" data-view="medir"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Medir</a>
+    <a href="#historico" data-view="historico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Histórico</a>
+    <a href="#relatorio" data-view="relatorio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z M14 3v5h5 M10 13h6 M10 17h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>Relatório</a>
+    <a href="#ajustes" data-view="ajustes"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Ajustes</a>
+  </nav>
+</div>
+
+<div class="lightbox" id="lightbox" hidden><img id="lbImg" alt="Foto da medição"></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<!-- Área usada só na impressão do relatório -->
+<div id="printArea" class="print-area" aria-hidden="true"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
