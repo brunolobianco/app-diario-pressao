@@ -4,7 +4,8 @@
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const DEFAULT_MODEL = "claude-haiku-5-5";
+  const CONFIG = window.APP_CONFIG || {};
+  const WORKER_URL = (CONFIG.workerUrl || "").replace(/\/$/, "");
   const TAGS = ["Em repouso","Ao acordar","Antes de dormir","Após café","Após refeição","Após exercício","Trabalhando","Estressado","Após remédio","Com dor de cabeça"];
 
   /* ================= utilidades ================= */
@@ -250,54 +251,63 @@
     let blob; try { blob = await shrink(f, 1280); } catch { blob = f; }
     state.photoBlob = blob; if (state.editing) state.editPhoto = "new";
     if (!state.editing) $("fWhen").value = localInput(new Date());
-    if (ls.get("dp.apiKey", "")) { showPreview(blob, '<span class="spin"></span>Lendo o visor do aparelho…'); readPhoto(blob); }
+    const ocrOn = ls.get("dp.ocrOn", true) && !!window.OCR;
+    if ((WORKER_URL && navigator.onLine) || ocrOn) { showPreview(blob, '<span class="spin"></span>Lendo o visor do aparelho…'); readPhoto(blob); }
     else showPreview(blob, "Foto anexada. Digite os valores do visor nos campos abaixo.");
   });
 
+  // 1º: Gemini pelo Worker  →  2º: leitor do aparelho (Tesseract)  →  3º: digitar
+  let readSeq = 0;
   async function readPhoto(blob) {
-    const key = ls.get("dp.apiKey", ""), model = ls.get("dp.model", DEFAULT_MODEL) || DEFAULT_MODEL;
-    if (!navigator.onLine) { setStatus("Sem internet: digite os valores abaixo. A foto será salva normalmente.", "warn"); return; }
-    try {
-      const data = (await blobToDataURL(blob)).split(",")[1];
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": key,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model, max_tokens: 300,
-          messages: [{ role: "user", content: [
-            { type: "image", source: { type: "base64", media_type: blob.type || "image/jpeg", data } },
-            { type: "text", text:
-`A imagem é a foto do visor de um medidor de pressão arterial doméstico.
-Leia os valores. Normalmente SYS (sistólica) é o número de cima e maior, DIA (diastólica) é o do meio, e PUL/pulso é o menor, muitas vezes ao lado de um coração.
-Responda SOMENTE com JSON neste formato:
-{"sistolica": inteiro ou null, "diastolica": inteiro ou null, "pulso": inteiro ou null, "confianca": "alta" | "media" | "baixa", "observacao": "frase curta em português"}
-Use null para o que não der para ler. Se não for um medidor de pressão, todos null e explique em observacao.` },
-          ] }],
-        }),
-      });
-      if (res.status === 401) { setStatus("A chave da API foi recusada. Confira em Ajustes. Enquanto isso, digite os valores abaixo.", "bad"); return; }
-      if (res.status === 429) { setStatus("Muitas leituras em pouco tempo. Espere um pouco ou digite os valores.", "warn"); return; }
-      if (!res.ok) {
-        let msg = ""; try { msg = (await res.json())?.error?.message || ""; } catch {}
-        setStatus("Não deu para ler a foto agora" + (msg ? ` (${esc(msg)})` : "") + ". Digite os valores abaixo.", "warn"); return;
+    const seq = ++readSeq;
+    const stale = () => seq !== readSeq || state.photoBlob !== blob;
+    let aiMsg = "";
+    if (WORKER_URL && navigator.onLine) {
+      try {
+        const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 25000);
+        const data = (await blobToDataURL(blob)).split(",")[1];
+        const res = await fetch(WORKER_URL + "/read", {
+          method: "POST", signal: ctl.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: data, mimeType: blob.type || "image/jpeg" }),
+        });
+        clearTimeout(timer);
+        const r = await res.json().catch(() => ({}));
+        if (stale()) return;
+        if (res.ok) { if (applyReading(r, "IA")) return; aiMsg = r.observacao || ""; }
+        else aiMsg = r.message || "O leitor com IA não respondeu.";
+      } catch { aiMsg = "O leitor com IA não respondeu."; }
+    } else if (WORKER_URL) aiMsg = "Sem internet.";
+
+    if (stale()) return;
+    if (ls.get("dp.ocrOn", true) && window.OCR) {
+      setStatus(`<span class="spin"></span>${aiMsg ? esc(aiMsg) + " " : ""}Tentando o leitor do aparelho…`);
+      try {
+        const r = await window.OCR.read(blob);
+        if (stale()) return;
+        markOcrReady();
+        if (applyReading(r, "aparelho")) return;
+        setStatus(esc(r.observacao || "Não consegui ler os números.") + " Digite os valores abaixo.", "warn");
+        return;
+      } catch {
+        if (stale()) return;
+        setStatus((aiMsg ? esc(aiMsg) + " " : "") + "O leitor do aparelho precisa de internet na primeira vez para ser baixado. Digite os valores abaixo.", "warn");
+        return;
       }
-      const out = await res.json();
-      const text = (out.content || []).map((c) => c.text || "").join("");
-      const m = text.match(/\{[\s\S]*\}/);
-      const r = m ? JSON.parse(m[0]) : {};
-      const s = num(r.sistolica), d = num(r.diastolica), p = num(r.pulso);
-      if (s != null) $("fSys").value = s; if (d != null) $("fDia").value = d; if (p != null) $("fPul").value = p;
-      const conf = r.confianca || "media";
-      if (s == null && d == null) setStatus("Não consegui ler os números. " + esc(r.observacao || "") + " Digite os valores abaixo.", "warn");
-      else setStatus(`Leitura ${conf === "alta" ? "com boa confiança" : conf === "baixa" ? "incerta" : "razoável"}: <b>${s ?? "?"}/${d ?? "?"}</b>, pulso ${p ?? "?"}. Confira com o visor antes de salvar.${r.observacao ? `<br><span class="small">${esc(r.observacao)}</span>` : ""}`, conf === "baixa" ? "warn" : "ok");
-    } catch {
-      setStatus("Não deu para ler a foto agora. Digite os valores abaixo.", "warn");
     }
+    setStatus((aiMsg ? esc(aiMsg) + " " : "") + "Digite os valores do visor abaixo.", "warn");
+  }
+
+  function applyReading(r, source) {
+    const s = num(r.sistolica), d = num(r.diastolica), p = num(r.pulso);
+    if (s == null && d == null) return false;
+    if (s != null) $("fSys").value = s; if (d != null) $("fDia").value = d; if (p != null) $("fPul").value = p;
+    const conf = r.confianca || "media";
+    const how = source === "IA" ? "pela IA" : "pelo leitor do aparelho";
+    const q = conf === "alta" ? "com boa confiança" : conf === "baixa" ? "incerta" : "razoável";
+    setStatus(`Leitura ${how}, ${q}: <b>${s ?? "?"}/${d ?? "?"}</b>, pulso ${p ?? "?"}. Confira com o visor antes de salvar.${r.observacao ? `<br><span class="small">${esc(r.observacao)}</span>` : ""}`,
+      conf === "baixa" || source !== "IA" ? "warn" : "ok");
+    return true;
   }
 
   $("form").addEventListener("submit", async (e) => {
@@ -629,24 +639,38 @@ Use null para o que não der para ler. Se não for um medidor de pressão, todos
     download("lembretes-pressao.ics", ics, "text/calendar;charset=utf-8");
   };
 
-  /* ================= chave da API ================= */
-  function renderKey() {
-    const k = ls.get("dp.apiKey", "");
-    $("apiKey").value = ""; $("apiKey").placeholder = k ? `Chave salva (…${k.slice(-4)})` : "sk-ant-...";
-    $("apiModel").value = ls.get("dp.model", DEFAULT_MODEL) || DEFAULT_MODEL;
-    $("clearKey").disabled = !k;
-    $("aiHint").innerHTML = k
-      ? "Ao tirar a foto, os números são lidos automaticamente. Confira antes de salvar."
-      : 'Digite os valores do visor abaixo. Para leitura automática da foto, veja <a href="#ajustes">Ajustes</a>.';
+  /* ================= leitores automáticos ================= */
+  const dot = (id, cls) => { $(id).className = "dot " + cls; };
+  async function checkAI() {
+    if (!WORKER_URL) { dot("aiDot", ""); $("aiState").textContent = "Não configurado neste site (config.js)."; return; }
+    if (!navigator.onLine) { dot("aiDot", "wait"); $("aiState").textContent = "Sem internet agora."; return; }
+    dot("aiDot", "wait"); $("aiState").textContent = "Verificando…";
+    try {
+      const r = await fetch(WORKER_URL + "/", { cache: "no-store" }).then((x) => x.json());
+      if (r.ok && r.configured) { dot("aiDot", "on"); $("aiState").textContent = "Ativo. Usado primeiro quando há internet."; }
+      else { dot("aiDot", "off"); $("aiState").textContent = "O leitor está no ar, mas sem chave do Gemini."; }
+    } catch { dot("aiDot", "off"); $("aiState").textContent = "Não respondeu. Confira o endereço em config.js."; }
   }
-  $("saveKey").onclick = () => {
-    const v = $("apiKey").value.trim();
-    if (v && !v.startsWith("sk-")) { toast("A chave deve começar com sk-ant-"); return; }
-    if (v) ls.set("dp.apiKey", v);
-    ls.set("dp.model", $("apiModel").value.trim() || DEFAULT_MODEL);
-    renderKey(); toast(v ? "Chave salva neste aparelho" : "Ajustes salvos");
+  function markOcrReady() {
+    ls.set("dp.ocrReady", true);
+    dot("ocrDot", "on");
+    $("ocrState").textContent = "Baixado. Funciona sem internet. Erra mais que a IA.";
+    $("ocrDownload").hidden = true;
+  }
+  function renderReaders() {
+    $("ocrOn").checked = ls.get("dp.ocrOn", true);
+    if (!window.OCR) { dot("ocrDot", "off"); $("ocrState").textContent = "Indisponível neste navegador."; $("ocrDownload").hidden = true; }
+    else if (ls.get("dp.ocrReady", false)) markOcrReady();
+    checkAI();
+  }
+  $("ocrOn").onchange = () => ls.set("dp.ocrOn", $("ocrOn").checked);
+  $("ocrDownload").onclick = async () => {
+    const b = $("ocrDownload"); b.disabled = true; b.innerHTML = '<span class="spin"></span>Baixando…';
+    try { await window.OCR.warmup(); markOcrReady(); toast("Leitor do aparelho pronto"); }
+    catch { toast("Não foi possível baixar. Verifique a internet."); }
+    finally { b.disabled = false; b.textContent = "Baixar leitor do aparelho agora"; }
   };
-  $("clearKey").onclick = () => { ls.del("dp.apiKey"); renderKey(); toast("Chave removida"); };
+  window.addEventListener("online", checkAI);
 
   /* ================= cópia de segurança ================= */
   $("bkExport").onclick = async () => {
@@ -706,7 +730,11 @@ Use null para o que não der para ler. Se não for um medidor de pressão, todos
   }
 
   /* ================= início ================= */
-  resetForm(); renderKey(); renderReminderLinks(); renderStorage();
+  resetForm(); renderReaders(); renderReminderLinks(); renderStorage();
+  // sem IA configurada, deixa o leitor do aparelho baixado de antemão (só com internet)
+  if (!WORKER_URL && window.OCR && navigator.onLine && ls.get("dp.ocrOn", true) && !ls.get("dp.ocrReady", false)) {
+    setTimeout(() => window.OCR.warmup().then(markOcrReady).catch(() => {}), 4000);
+  }
   route();
   loadReadings().catch(() => {
     $("log").innerHTML = '<div class="status bad">Este navegador não permite guardar dados (modo anônimo?). Abra o app numa janela normal.</div>';

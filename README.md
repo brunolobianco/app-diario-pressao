@@ -45,14 +45,19 @@ As medições e as fotos ficam no **IndexedDB** do navegador do celular, e os aj
 - os dados **se perdem** se o navegador for limpo, o app for desinstalado ou o celular for trocado. Por isso existe **Ajustes → Cópia de segurança**, que gera um arquivo `.json` (com ou sem fotos) que pode ser restaurado em outro aparelho;
 - no iPhone, o Safari pode apagar dados de sites que não são abertos há muitas semanas. Instalar na tela inicial reduz esse risco, e o app pede ao navegador armazenamento persistente.
 
-## Leitura automática da foto (opcional)
+## Leitura automática da foto
 
-Sem configuração, a pessoa digita os números e a foto fica salva como comprovante. Para o app ler o visor sozinho:
+Ninguém da família precisa configurar nada. Ao tirar a foto, o app tenta, nesta ordem:
 
-1. Crie uma chave em [console.anthropic.com](https://console.anthropic.com) → *API Keys* (requer créditos na conta; cada leitura custa uma fração de centavo).
-2. No app, abra **Ajustes → Leitura automática da foto**, cole a chave e salve.
+1. **Leitor com IA (Google Gemini)**, através de um Cloudflare Worker seu. É o mais preciso. Precisa de internet.
+2. **Leitor do aparelho (Tesseract.js)**, com um modelo treinado para displays de 7 segmentos. Roda no próprio celular, funciona offline depois de baixado (cerca de 3 MB) e não envia a foto para lugar nenhum, mas erra mais.
+3. Se nenhum conseguir, a pessoa digita os números.
 
-A chave fica guardada **só naquele celular** e é enviada apenas para `api.anthropic.com`, junto com a foto. Cada familiar que quiser a leitura automática precisa configurar a chave no próprio aparelho. Não coloque a chave no código nem no repositório. O modelo usado pode ser trocado em *Avançado* (padrão: `claude-haiku-5-5`).
+Em qualquer caso, o app mostra a leitura e pede para conferir antes de salvar.
+
+Sem o Worker configurado, o app usa direto o leitor do aparelho. O passo a passo para criar a chave do Gemini e publicar o Worker está em [`worker/COMO-CONFIGURAR.md`](worker/COMO-CONFIGURAR.md).
+
+A chave do Gemini fica guardada como segredo no Cloudflare. **Nunca coloque a chave no código nem no repositório**, porque o site é público.
 
 ## Lembretes
 
@@ -63,14 +68,17 @@ Um site não consegue mandar notificações confiáveis sem um servidor, então 
 
 ## Atualizar o app
 
-Depois de alterar os arquivos, aumente o número da versão em `sw.js` (`const CACHE = "diario-pressao-v2"`) e faça o `git push`. Os celulares baixam a nova versão na próxima vez que abrirem o app com internet.
+Depois de alterar os arquivos, aumente o número da versão em `sw.js` (por exemplo, `const CACHE = "diario-pressao-v3"`) e faça o `git push`. Os celulares baixam a nova versão na próxima vez que abrirem o app com internet.
 
 ## Estrutura
 
 ```
 index.html             telas do app
 styles.css             visual (tema claro e escuro) e layout de impressão do relatório
-app.js                 lógica: banco local, foto, leitura por IA, gráfico, relatório, cópia de segurança
+config.js              endereço do Worker do Gemini (o único arquivo que você precisa editar)
+app.js                 lógica: banco local, foto, gráfico, relatório, cópia de segurança
+ocr.js                 leitor do visor no próprio aparelho (Tesseract.js)
+worker/                Cloudflare Worker que guarda a chave do Gemini e lê a foto
 sw.js                  service worker (funciona offline)
 manifest.webmanifest   dados para instalar como app
 icons/                 ícones

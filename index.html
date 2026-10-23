@@ -79,7 +79,7 @@
             <button type="button" id="removePhoto" class="link">Remover foto</button>
           </div>
         </div>
-        <p class="muted small" id="aiHint">Digite os valores do visor abaixo. Para leitura automática da foto, veja <a href="#ajustes">Ajustes</a>.</p>
+        <p class="muted small" id="aiHint">Ao tirar a foto, o app tenta ler os números sozinho. Confira sempre antes de salvar.</p>
 
         <div class="grid3">
           <div class="field"><label for="fSys">Sistólica <i>mmHg</i></label><input id="fSys" type="number" inputmode="numeric" min="50" max="260" placeholder="120"></div>
@@ -189,24 +189,16 @@
       </div>
 
       <div class="card">
-        <h2>Leitura automática da foto <span class="pill">opcional</span></h2>
-        <p class="muted small">Com uma chave da API da Anthropic, o app lê os números do visor sozinho. Cada leitura custa uma fração de centavo na sua conta. A chave fica guardada só neste aparelho e é enviada apenas para api.anthropic.com.</p>
-        <div class="field">
-          <label for="apiKey">Chave da API</label>
-          <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
-        </div>
-        <details>
-          <summary class="small">Avançado</summary>
-          <div class="field" style="margin-top:10px">
-            <label for="apiModel">Modelo</label>
-            <input id="apiModel" type="text" spellcheck="false">
-          </div>
-        </details>
+        <h2>Leitura automática da foto</h2>
+        <ul class="readers">
+          <li><span id="aiDot" class="dot"></span><div><b>Leitor com IA (Gemini)</b><span id="aiState" class="muted small">Verificando…</span></div></li>
+          <li><span id="ocrDot" class="dot"></span><div><b>Leitor do aparelho</b><span id="ocrState" class="muted small">Funciona sem internet depois de baixado (cerca de 3 MB). Erra mais que a IA.</span></div></li>
+        </ul>
+        <label class="check"><input type="checkbox" id="ocrOn" checked> Usar o leitor do aparelho quando a IA não estiver disponível</label>
         <div class="row">
-          <button id="saveKey" class="btn primary grow" type="button">Salvar chave</button>
-          <button id="clearKey" class="btn" type="button">Remover</button>
+          <button id="ocrDownload" class="btn grow" type="button">Baixar leitor do aparelho agora</button>
         </div>
-        <p class="muted small">Crie a chave em console.anthropic.com → API Keys. Não compartilhe sua chave com outras pessoas.</p>
+        <p class="muted small">Com o leitor de IA, a foto do visor é enviada ao Google Gemini só para ler os números. Na faixa gratuita, o Google pode usar esse conteúdo para melhorar os serviços dele. O leitor do aparelho não envia nada para a internet.</p>
       </div>
 
       <div class="card">
@@ -246,6 +238,8 @@
 <!-- Área usada só na impressão do relatório -->
 <div id="printArea" class="print-area" aria-hidden="true"></div>
 
+<script src="config.js"></script>
+<script src="ocr.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -146,6 +146,11 @@ details summary{cursor:pointer;color:var(--muted)}
 .plist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 .plist li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
 .plist li:first-child{border-top:0}
+.readers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.readers li{display:flex;gap:10px;align-items:flex-start}
+.readers li div{display:flex;flex-direction:column;min-width:0}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--line);margin-top:6px;flex:none}
+.dot.on{background:var(--ok)} .dot.off{background:var(--bad)} .dot.wait{background:var(--warn)}
 .remlinks{display:flex;flex-wrap:wrap;gap:8px}
 .remlinks a{font-size:.85rem;font-weight:600;padding:7px 12px;border-radius:999px;border:1px solid var(--line);text-decoration:none;background:var(--bg)}
 .foot{font-size:.78rem;color:var(--muted);line-height:1.5;padding:0 2px}

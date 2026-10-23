@@ -1,0 +1,21 @@
+# Usado só se você publicar o Worker pela linha de comando (npx wrangler deploy).
+# Pelo painel do Cloudflare este arquivo não é necessário.
+name = "leitor-pressao"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+# Endereço do seu site no GitHub Pages (sem barra no final). Vários: separe por vírgula.
+ALLOWED_ORIGINS = "https://SEU-USUARIO.github.io"
+GEMINI_MODELS = "gemini-3.5-flash-lite,gemini-3.8-flash"
+DAILY_LIMIT_PER_IP = "60"
+
+# Limite diário por IP (opcional). Crie o namespace com:
+#   npx wrangler kv namespace create LIMITS
+# e cole o id abaixo, tirando os comentários.
+# [[kv_namespaces]]
+# binding = "LIMITS"
+# id = "COLE_AQUI_O_ID"
+
+# A chave NÃO vai aqui. Cadastre como segredo:
+#   npx wrangler secret put GEMINI_API_KEY
